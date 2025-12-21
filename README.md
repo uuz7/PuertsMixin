@@ -1,5 +1,6 @@
 ## PuertsMixin
 [UE][Puerts]快速Mixin并打开VScode
+- 版本 :测试使用5.6没问题
 ### 功能
 1. 点击蓝图工具栏的Mixin按钮自动根据模板在Typescript对应目录生成Mixin文件
 2. Mixin后自动调用Puerts.gen并打开VScode,如果已经Mixin会自动打开到对应文件
