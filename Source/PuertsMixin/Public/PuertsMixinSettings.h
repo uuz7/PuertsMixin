@@ -31,7 +31,7 @@ public:
 	UPuertsMixinSettings();
 
 	/** 选择要使用的外部代码编辑器 */
-	UPROPERTY(DisplayName="外部代码编辑器", EditAnywhere, config)
+	UPROPERTY(DisplayName = "外部代码编辑器", EditAnywhere, config)
 	EPuertsMixinEditorType EditorType;
 
 	/**
@@ -47,14 +47,26 @@ public:
 	FString CustomEditorExecutable;
 
 	/**
-	 * TypeScript 入口文件名称
-	 * 用于自动导入 Mixin类
+	 * Mixin 生成文件的根路径（相对于 TypeScript 目录）
+	 * 输出路径 = TypeScript目录 + MixinRootPath + 蓝图相对路径
+	 * 例如：Blueprints 或 src/blueprints
+	 * 默认值：Blueprints
+	 */
+	UPROPERTY(
+		EditAnywhere, config, Category = "Code Generation", meta = (DisplayName = "Mixin文件根路径(相对TypeScript)")
+	)
+	FString MixinRootPath;
+
+	/**
+	 * TypeScript 入口文件路径（相对于 TypeScript 目录）
+	 * 用于自动导入 Mixin 类
+	 * 例如：Main.ts 或 src/main.ts
 	 * 默认值：Main.ts
 	 */
 	UPROPERTY(
-		EditAnywhere, config, Category = "Code Generation", meta = (DisplayName = "主入口文件名")
+		EditAnywhere, config, Category = "Code Generation", meta = (DisplayName = "主入口文件路径(相对TypeScript)")
 	)
-	FString MainEntryFileName;
+	FString MainEntryFilePath;
 
 	/**
 	 * 获取当前配置的编辑器启动命令

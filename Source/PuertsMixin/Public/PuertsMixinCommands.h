@@ -16,7 +16,8 @@ public:
 			TEXT("PuertsMixin"), NSLOCTEXT("Contexts", "PuertsMixin", "PuertsMixin Plugin"), NAME_None,
 			FPuertsMixinStyle::GetStyleSetName()
 		)
-	{}
+	{
+	}
 
 	// TCommands<> interface
 	virtual void RegisterCommands() override;

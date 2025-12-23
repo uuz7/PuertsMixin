@@ -16,8 +16,9 @@
 
 FPuertsMixinEditorToolbar::FPuertsMixinEditorToolbar()
 	: CommandList(new FUICommandList),
-	  ContextObject(nullptr)
-{}
+	ContextObject(nullptr)
+{
+}
 
 void FPuertsMixinEditorToolbar::Initialize()
 {
@@ -89,11 +90,23 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		RelativePath.RightChopInline(6); // 移除 "/Game/"
 	}
 
+	// 获取设置
+	const UPuertsMixinSettings* Settings = GetDefault<UPuertsMixinSettings>();
+
+	// 获取配置的 Mixin 根路径（相对于 TypeScript 目录）
+	FString MixinRoot = Settings->MixinRootPath;
+	if (MixinRoot.IsEmpty())
+	{
+		MixinRoot = TEXT("Blueprints");
+	}
+
 	// 构造绝对路径：
-	// <Project>/TypeScript/Blueprints/NPC/Services/BTS_Shoot.ts
+	// 输出路径 = <Project>/TypeScript/<MixinRoot>/<蓝图相对路径>.ts
+	// 例如：<Project>/TypeScript/src/blueprints/NPC/Services/BTS_Shoot.ts
 	FString AbsFilePath = FPaths::Combine(
 		FPaths::ProjectDir(),
-		TEXT("TypeScript/Blueprints"),
+		TEXT("TypeScript"),
+		MixinRoot,
 		RelativePath + TEXT(".ts")
 	);
 
@@ -101,7 +114,7 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 	FPaths::MakeStandardFilename(AbsFilePath);
 
 	// 确保目录存在
-	FString FileDir             = FPaths::GetPath(AbsFilePath);
+	FString FileDir = FPaths::GetPath(AbsFilePath);
 	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 
 	if (!PlatformFile.DirectoryExists(*FileDir))
@@ -109,18 +122,25 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		PlatformFile.CreateDirectoryTree(*FileDir);
 	}
 
-	// 获取设置
-	const UPuertsMixinSettings* Settings = GetDefault<UPuertsMixinSettings>();
-
 	// 如果文件不存在，则生成 TS 模板
 	if (!PlatformFile.FileExists(*AbsFilePath))
 	{
 		// 根据 Blueprint 的层级深度计算 Mixin 的相对导入路径
-		// 例如：NPC/Services/BTS_Shoot -> ../../../Mixin
+		// 例如：
+		// MixinRoot = "src/blueprints", RelativePath = "NPC/Services/BTS_Shoot"
+		// 文件位置：TypeScript/src/blueprints/NPC/Services/BTS_Shoot.ts
+		// 需要回溯到 TypeScript 目录，然后找到 Mixin
+		// 路径：../../../../Mixin
+		
 		TArray<FString> PathParts;
 		RelativePath.ParseIntoArray(PathParts, TEXT("/"), true);
 
-		int32 Depth = PathParts.Num();
+		// 计算 MixinRoot 的深度
+		TArray<FString> RootParts;
+		MixinRoot.ParseIntoArray(RootParts, TEXT("/"), true);
+
+		// 总深度 = MixinRoot 深度 + 蓝图路径深度
+		int32 Depth = PathParts.Num() + RootParts.Num();
 
 		FString MixinImportPath = TEXT("..");
 		for (int32 i = 1; i < Depth; ++i)
@@ -196,10 +216,10 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 				{
 					// 替换占位符
 					Content = Content.Replace(TEXT("{BPName}"), *BPName)
-									 .Replace(TEXT("{PackageName}"), *PackageName)
-									 .Replace(TEXT("{MixinImportPath}"), *MixinImportPath)
-									 .Replace(TEXT("{AssetPath}"), *ClassPath)
-									 .Replace(TEXT("{TsTypePath}"), *TsTypePath);
+						.Replace(TEXT("{PackageName}"), *PackageName)
+						.Replace(TEXT("{MixinImportPath}"), *MixinImportPath)
+						.Replace(TEXT("{AssetPath}"), *ClassPath)
+						.Replace(TEXT("{TsTypePath}"), *TsTypePath);
 
 					bTemplateFound = true;
 					break;
@@ -217,10 +237,10 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 				if (FFileHelper::LoadFileToString(Content, *DefaultTemplatePath))
 				{
 					Content = Content.Replace(TEXT("{BPName}"), *BPName)
-									 .Replace(TEXT("{PackageName}"), *PackageName)
-									 .Replace(TEXT("{MixinImportPath}"), *MixinImportPath)
-									 .Replace(TEXT("{AssetPath}"), *ClassPath)
-									 .Replace(TEXT("{TsTypePath}"), *TsTypePath);
+						.Replace(TEXT("{PackageName}"), *PackageName)
+						.Replace(TEXT("{MixinImportPath}"), *MixinImportPath)
+						.Replace(TEXT("{AssetPath}"), *ClassPath)
+						.Replace(TEXT("{TsTypePath}"), *TsTypePath);
 					bTemplateFound = true;
 				}
 			}
@@ -251,14 +271,21 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		// -------------------------------------------------------------------------
 		// 自动注册 Mixin 类到入口文件
 		// -------------------------------------------------------------------------
-		FString MainEntryName = Settings->MainEntryFileName;
-		if (MainEntryName.IsEmpty())
+		
+		// 获取入口文件路径（相对于 TypeScript 目录）
+		FString MainEntryPath = Settings->MainEntryFilePath;
+		if (MainEntryPath.IsEmpty())
 		{
-			MainEntryName = TEXT("Main.ts");
+			MainEntryPath = TEXT("Main.ts");
 		}
 
-		// Main 文件绝对路径：<Project>/TypeScript/Main.ts
-		FString MainFilePath = FPaths::Combine(FPaths::ProjectDir(), TEXT("TypeScript"), MainEntryName);
+		// Main 文件绝对路径：<Project>/TypeScript/<MainEntryPath>
+		// 例如：<Project>/TypeScript/src/main.ts
+		FString MainFilePath = FPaths::Combine(
+			FPaths::ProjectDir(),
+			TEXT("TypeScript"),
+			MainEntryPath
+		);
 		FPaths::MakeStandardFilename(MainFilePath);
 
 		if (PlatformFile.FileExists(*MainFilePath))
@@ -267,11 +294,70 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 			if (FFileHelper::LoadFileToString(MainContent, *MainFilePath))
 			{
 				// 计算相对导入路径
-				// Generated TS: TypeScript/Blueprints/NPC/Services/BTS_Shoot.ts
-				// Main TS: TypeScript/Main.ts
-				// Relative: ./Blueprints/NPC/Services/BTS_Shoot
+				// 例如：
+				// Generated TS: TypeScript/src/blueprints/NPC/Services/BTS_Shoot.ts
+				// Main TS: TypeScript/src/main.ts
+				// 需要计算从 main.ts 到 BTS_Shoot.ts 的相对路径
+				// 结果: ./blueprints/NPC/Services/BTS_Shoot
 
-				FString ImportPath = TEXT("./Blueprints/") + RelativePath;
+				// 获取 Main 文件所在目录（相对于 TypeScript）
+				FString MainDir = FPaths::GetPath(MainEntryPath);
+				// 标准化路径分隔符
+				MainDir.ReplaceInline(TEXT("\\"), TEXT("/"));
+				FString MixinRootCopy = MixinRoot;
+				MixinRootCopy.ReplaceInline(TEXT("\\"), TEXT("/"));
+
+				// 分解路径
+				TArray<FString> MainDirParts;
+				if (!MainDir.IsEmpty())
+				{
+					MainDir.ParseIntoArray(MainDirParts, TEXT("/"), true);
+				}
+
+				TArray<FString> MixinRootParts;
+				MixinRootCopy.ParseIntoArray(MixinRootParts, TEXT("/"), true);
+
+				// 找到共同父目录
+				int32 CommonDepth = 0;
+				int32 MinDepth = FMath::Min(MainDirParts.Num(), MixinRootParts.Num());
+				for (int32 i = 0; i < MinDepth; ++i)
+				{
+					if (MainDirParts[i] == MixinRootParts[i])
+					{
+						CommonDepth++;
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				// 计算相对路径
+				FString ImportPath;
+
+				// 从 Main 文件目录向上回溯到共同父目录
+				int32 UpLevels = MainDirParts.Num() - CommonDepth;
+				if (UpLevels == 0)
+				{
+					ImportPath = TEXT(".");
+				}
+				else
+				{
+					ImportPath = TEXT("..");
+					for (int32 i = 1; i < UpLevels; ++i)
+					{
+						ImportPath += TEXT("/..");
+					}
+				}
+
+				// 添加 MixinRoot 中未共享的部分
+				for (int32 i = CommonDepth; i < MixinRootParts.Num(); ++i)
+				{
+					ImportPath += TEXT("/") + MixinRootParts[i];
+				}
+
+				// 添加蓝图相对路径
+				ImportPath += TEXT("/") + RelativePath;
 				// 将 Windows 路径分隔符替换为 /
 				ImportPath.ReplaceInline(TEXT("\\"), TEXT("/"));
 
@@ -289,8 +375,9 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		}
 	}
 
+
 	// 从配置获取编辑器启动命令与类型
-	const FString EditorCommand             = Settings->GetEditorCommand();
+	const FString EditorCommand = Settings->GetEditorCommand();
 	const EPuertsMixinEditorType EditorType = Settings->EditorType;
 
 	// 根据类型构造命令行
@@ -306,12 +393,12 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		if (EditorCommand.EndsWith(TEXT(".cmd")) || EditorCommand.EndsWith(TEXT(".bat")))
 		{
 			ProcExecutable = TEXT("cmd.exe");
-			ProcArgs       = FString::Printf(TEXT("/c %s %s"), *EditorCommand, *CmdArgs);
+			ProcArgs = FString::Printf(TEXT("/c %s %s"), *EditorCommand, *CmdArgs);
 		}
 		else
 		{
 			ProcExecutable = EditorCommand;
-			ProcArgs       = CmdArgs;
+			ProcArgs = CmdArgs;
 		}
 	}
 	else // Custom
@@ -324,12 +411,12 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		if (EditorCommand.EndsWith(TEXT(".cmd")) || EditorCommand.EndsWith(TEXT(".bat")))
 		{
 			ProcExecutable = TEXT("cmd.exe");
-			ProcArgs       = FString::Printf(TEXT("/c %s %s"), *EditorCommand, *CmdArgs);
+			ProcArgs = FString::Printf(TEXT("/c %s %s"), *EditorCommand, *CmdArgs);
 		}
 		else
 		{
 			ProcExecutable = EditorCommand;
-			ProcArgs       = CmdArgs;
+			ProcArgs = CmdArgs;
 		}
 	}
 
@@ -353,7 +440,7 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		{
 			GEditor->Exec(nullptr, TEXT("Puerts.Gen"), *GLog);
 		}
-		
+
 		if (!Handle.IsValid())
 		{
 			FMessageDialog::Open(
