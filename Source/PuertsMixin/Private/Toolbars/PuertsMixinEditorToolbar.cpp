@@ -266,7 +266,7 @@ void FPuertsMixinEditorToolbar::Mixin_Executed()
 		}
 
 		// 写入文件
-		FFileHelper::SaveStringToFile(Content, *AbsFilePath);
+		FFileHelper::SaveStringToFile(Content, *AbsFilePath,FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 
 		// -------------------------------------------------------------------------
 		// 自动注册 Mixin 类到入口文件
