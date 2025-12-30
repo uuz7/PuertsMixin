@@ -15,8 +15,6 @@
 #define LOCTEXT_NAMESPACE "FPuertsMixinEditorToolbar"
 
 FPuertsMixinEditorToolbar::FPuertsMixinEditorToolbar()
-	: CommandList(new FUICommandList),
-	ContextObject(nullptr)
 {
 }
 
@@ -27,10 +25,7 @@ void FPuertsMixinEditorToolbar::Initialize()
 
 void FPuertsMixinEditorToolbar::BindCommands()
 {
-	const auto& Commands = FPuertsMixinCommands::Get();
-	CommandList->MapAction(
-		Commands.PluginAction, FExecuteAction::CreateRaw(this, &FPuertsMixinEditorToolbar::Mixin_Executed)
-	);
+
 }
 
 void FPuertsMixinEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UObject* InContextObject)
@@ -39,9 +34,6 @@ void FPuertsMixinEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UO
 		return;
 
 	ToolbarBuilder.BeginSection(NAME_None);
-
-	// 保存上下文对象
-	ContextObject = InContextObject;
 
 	ToolbarBuilder.AddToolBarButton(
 		FPuertsMixinCommands::Get().PluginAction,
@@ -57,20 +49,27 @@ void FPuertsMixinEditorToolbar::BuildToolbar(FToolBarBuilder& ToolbarBuilder, UO
 TSharedRef<FExtender> FPuertsMixinEditorToolbar::GetExtender(UObject* InContextObject)
 {
 	TSharedRef<FExtender> ToolbarExtender(new FExtender());
-	const auto ExtensionDelegate = FToolBarExtensionDelegate::CreateLambda(
-		[this, InContextObject](FToolBarBuilder& ToolbarBuilder) {
-			BuildToolbar(ToolbarBuilder, InContextObject);
-		}
+	
+	TWeakObjectPtr<UObject> WeakContextObject = InContextObject;
+
+	TSharedRef<FUICommandList> LocalCommandList = MakeShared<FUICommandList>();
+	LocalCommandList->MapAction(
+		FPuertsEnhanceCommands::Get().PluginAction,
+		FExecuteAction::CreateLambda([this, WeakContextObject]() { Mixin_Executed(WeakContextObject.Get()); })
 	);
 
+	const auto ExtensionDelegate = FToolBarExtensionDelegate::CreateLambda([this, WeakContextObject](FToolBarBuilder& ToolbarBuilder) {
+		BuildToolbar(ToolbarBuilder, WeakContextObject.Get());
+		});
+
 	// 添加到 "Asset" 区域之后
-	ToolbarExtender->AddToolBarExtension("Asset", EExtensionHook::After, CommandList, ExtensionDelegate);
+	ToolbarExtender->AddToolBarExtension("Asset", EExtensionHook::After, LocalCommandList, ExtensionDelegate);
 	return ToolbarExtender;
 }
 
-void FPuertsMixinEditorToolbar::Mixin_Executed()
+void FPuertsMixinEditorToolbar::Mixin_Executed(UObject* InContextObject)
 {
-	UBlueprint* TargetBP = Cast<UBlueprint>(ContextObject);
+	UBlueprint* TargetBP = Cast<UBlueprint>(InContextObject);
 	if (!TargetBP)
 	{
 		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("No Blueprint context found.")));
