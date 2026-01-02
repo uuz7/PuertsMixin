@@ -62,8 +62,8 @@ TSharedRef<FExtender> FPuertsMixinEditorToolbar::GetExtender(UObject* InContextO
 		BuildToolbar(ToolbarBuilder, WeakContextObject.Get());
 		});
 
-	// 添加到 "Asset" 区域之后
-	ToolbarExtender->AddToolBarExtension("Asset", EExtensionHook::After, LocalCommandList, ExtensionDelegate);
+	// 添加到 "Debugging" 区域之后
+	ToolbarExtender->AddToolBarExtension("Debugging", EExtensionHook::After, LocalCommandList, ExtensionDelegate);
 	return ToolbarExtender;
 }
 
